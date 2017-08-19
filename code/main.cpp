@@ -84,6 +84,38 @@ void DrawPixel(SDL_Surface * Buffer,float x,float y, float r ,float g,float b ,f
     }
 }
 
+void DrawRectangle(SDL_Surface * Buffer,float x,float y,float w,float h, float r ,float g,float b ,float a = 1.0f){
+
+    int X = x;
+    int Y = Buffer->h - y;
+    // NOTE(Shazan): Clipping
+    if(!(X<0||Y<0||X>Buffer->w - 1 ||Y>Buffer->h - 1)){
+        Uint8 *Row = (Uint8 *) Buffer->pixels + Y * Buffer->pitch +
+            X * Buffer->format->BytesPerPixel;
+        Uint32 Rshift, Gshift, Bshift, Ashift;
+
+        Rshift = 16;
+        Gshift = 8;
+        Bshift = 0;
+        Ashift = 24;
+    
+        Uint32 Color = (((Uint32)(r*255.0f) << Rshift) |
+                        ((Uint32)(b*255.0f) << Bshift) |
+                        ((Uint32)(g*255.0f) << Gshift) |
+                        ((Uint32)(a*255.0f) << Ashift));
+        for (int iY = Y; iY <= Y + h; ++iY)
+        {
+            Uint32 *Pixel = (Uint32 *)Row;
+            for (int iX = X; iX <= X + w; ++iX)
+            {
+                *Pixel++ = Color;
+            }
+            Row +=  Buffer->pitch;
+        }
+
+    }
+}
+
 
 void DrawLine(SDL_Surface * Buffer,int x0, int y0, int x1, int y1,float r ,float g,float b){ 
     bool steep = false; 
@@ -268,7 +300,7 @@ void DrawTriangleTextured(SDL_Surface *Buffer,SDL_Surface *Texture,float * Zbuff
     }         
 }
 
-void DrawTriangleTextured(Shader *Program,SDL_Surface *Buffer,SDL_Surface *Normal,SDL_Surface *Diffuse,float * Zbuffer, vec3 *Points,vec2 *UV,float* Intensity) { 
+void DrawTriangleTextured(Shader *Program,SDL_Surface *Buffer,SDL_Surface *Normal,SDL_Surface *Diffuse,SDL_Surface *Specular,float * Zbuffer, vec3 *Points,vec2 *UV,float* Intensity) { 
     
     Uint32 Rshift = 16, Gshift =8, Bshift = 0, Ashift=24;
     vec2 BBoxmin = {};
@@ -304,7 +336,7 @@ void DrawTriangleTextured(Shader *Program,SDL_Surface *Buffer,SDL_Surface *Norma
             //Interpolating Intensity to get light
             float iP = BarycentricPos.X * Intensity[0] + BarycentricPos.Y * Intensity[1] + BarycentricPos.Z * Intensity[2];
             */
-            bool discard = Program->f.Fragment(Diffuse,Normal,Program->varying_uv,Program->varying_intensity,&Color,BarycentricPos,&Program->Transform,&Program->InvTransform);
+            bool discard = Program->f.Fragment(Diffuse,Normal,Specular,Program->varying_uv,Program->varying_intensity,&Color,BarycentricPos,&Program->Transform,&Program->InvTransform);
             if (!discard) {
                 Zbuffer[int(P.X+P.Y*Buffer->w)] = P.Z;
                 // Write to Pixel in buffer
@@ -358,11 +390,14 @@ main(int argc,char **argv){
     mat4 Projection = Perspective(PI/8,width/height,0.1,1);
     
     //Loading Model
-    SDL_Surface* temp = SDL_LoadBMP("earth.bmp");
+    SDL_Surface* temp = SDL_LoadBMP("b.bmp");
     SDL_Surface* Diffuse = SDL_ConvertSurfaceFormat(temp,SDL_PIXELFORMAT_ARGB8888,0);
     SDL_FreeSurface(temp);
-    temp = SDL_LoadBMP("earth_normal.bmp");
+    temp = SDL_LoadBMP("b_normal.bmp");
     SDL_Surface* Normal = SDL_ConvertSurfaceFormat(temp,SDL_PIXELFORMAT_ARGB8888,0);
+    SDL_FreeSurface(temp);
+    temp = SDL_LoadBMP("b_spec.bmp");
+    SDL_Surface* Specular = SDL_ConvertSurfaceFormat(temp,SDL_PIXELFORMAT_ARGB8888,0);
     SDL_FreeSurface(temp);
     
     size_t num_shapes;
@@ -375,7 +410,6 @@ main(int argc,char **argv){
     fseek(File,0,SEEK_END);
     Size = ftell(File);
     fseek(File,0,SEEK_SET);
-    printf("Infinty: %f \n",INFINITY - 1);
     printf("Size: %i bytes\n",(int)Size);
     void* Buf = malloc(Size + 1);
     char * Buffer = (char *)Buf;
@@ -448,7 +482,7 @@ main(int argc,char **argv){
 #if 0
                     DrawTriangle(Surface,Zbuffer,Points,Intensity, Intensity, Intensity);
 #else
-                    DrawTriangleTextured(&Phong,Surface,Normal,Diffuse,Zbuffer,Points,tPoints,(float*)&InLight);
+                    DrawTriangleTextured(&Phong,Surface,Normal,Diffuse,Specular,Zbuffer,Points,tPoints,(float*)&InLight);
 #endif
                 }    
             }

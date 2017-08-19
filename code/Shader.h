@@ -151,7 +151,7 @@ mat4 Invert(mat4 m)
 #define VERTEX_NAME(name) name ## _v
 typedef VERTEX_SHADER(vertex_shader);
 
-#define FRAGMENT_SHADER(name) bool name ## _f(SDL_Surface *Diffuse,SDL_Surface *Normal,vec2 *varying_uv,vec3 varying_intensity,vec3 *color,vec3 BarycentricPos,mat4 *Transform,mat4 *InvTransform)
+#define FRAGMENT_SHADER(name) bool name ## _f(SDL_Surface *Diffuse,SDL_Surface *Normal,SDL_Surface *Specular,vec2 *varying_uv,vec3 varying_intensity,vec3 *color,vec3 BarycentricPos,mat4 *Transform,mat4 *InvTransform)
 #define FRAGMENT_NAME(name) name ## _f
 typedef FRAGMENT_SHADER(fragment_shader);
 
@@ -165,6 +165,7 @@ typedef struct function
 typedef struct Shader {
     vec3 varying_intensity; // written by vertex shader, read by fragment shader
     vec2 *varying_uv;        // same as above
+    vec2 *varying_nrml;        // same as above
     mat4 Transform;
     mat4 InvTransform;
     function f;
@@ -201,7 +202,7 @@ FRAGMENT_SHADER(Gouraud)
     return false;
 }
 
-Shader Gouraud= { {},{},{},{},{ FRAGMENT_NAME(Gouraud),
+Shader Gouraud= { {},{},{},{},{},{ FRAGMENT_NAME(Gouraud),
                                 VERTEX_NAME(Gouraud)}};
 
 // NOTE(Shazan)  :Phong 
@@ -221,31 +222,43 @@ VERTEX_SHADER(Phong)
 
 FRAGMENT_SHADER(Phong)
 {
+    //float intensity = DotVec3(varying_intensity,BarycentricPos);
 
     vec2 UVP = {};
     UVP.X = BarycentricPos.X * varying_uv[0].X + BarycentricPos.Y * varying_uv[1].X + BarycentricPos.Z * varying_uv[2].X;
     UVP.Y = BarycentricPos.X * varying_uv[0].Y + BarycentricPos.Y * varying_uv[1].Y + BarycentricPos.Z * varying_uv[2].Y;        
-    Uint8 *nPix = (Uint8 *) Diffuse->pixels + (int)((UVP.Y)*Diffuse->h) * Diffuse->pitch +
-        ((int)((1-UVP.X)*Diffuse->w) )* 4;
+    Uint8 *nPix = (Uint8 *) Normal->pixels + (int)((UVP.Y)*Normal->h) * Normal->pitch +
+        ((int)((1-UVP.X)*Normal->w) )* 4;
     Uint32 nPixel = *(Uint32 *)nPix;
     float nr = (float)((nPixel & 0x00FF0000) >> 16) / 255;
     float ng = (float)((nPixel & 0x0000FF00) >> 8) / 255;
     float nb = (float)((nPixel & 0x000000FF) >> 0) / 255;
-    vec4 n = NormalizeVec4(*InvTransform*Vec4(nr,ng,nb,1));
-    vec4 l = NormalizeVec4(*Transform*Vec4v(varying_intensity,1));
-    float intensity = MAX(0.f, Dot(n,l));
+    vec3 n = NormalizeVec3((*InvTransform*Vec4(nr,ng,nb,1)).XYZ);
+    vec3 l = NormalizeVec3((*Transform*Vec4v(varying_intensity,1)).XYZ);
+    vec3 r = NormalizeVec3((n*(n*l*Vec3(2.f,2.f,2.f)) - l));  
+    Uint8 *sPix = (Uint8 *) Specular->pixels + (int)((UVP.Y)*Specular->h) * Specular->pitch +
+        ((int)((1-UVP.X)*Specular->w) )* 4;
+    Uint32 sPixel = *(Uint32 *)sPix;
+    float sr = (float)((sPixel & 0x00FF0000) >> 16) / 255;
+    float sg = (float)((sPixel & 0x0000FF00) >> 8) / 255;
+    float sb = (float)((sPixel & 0x000000FF) >> 0) / 255;
+    float spec = Power(MAX(r.Z, 0.0f), Length(Vec3(sr,sg,sb)));
+    float diff = MAX(0.f, Dot(n,l));
+        //float intensity = MAX(0.f, Dot(n,l));
     Uint8 *Pix = (Uint8 *) Diffuse->pixels + (int)((UVP.Y)*Diffuse->h) * Diffuse->pitch +
         ((int)((1-UVP.X)*Diffuse->w) )* 4;
     Uint32 Pixel = *(Uint32 *)Pix;
-    float r = (float)((Pixel & 0x00FF0000) >> 16) / 255;
-    float g = (float)((Pixel & 0x0000FF00) >> 8) / 255;
-    float b = (float)((Pixel & 0x000000FF) >> 0) / 255;
-    *color = Vec3(r,g,b)*intensity;
+    float cr = (float)((Pixel & 0x00FF0000) >> 16) / 255;
+    float cg = (float)((Pixel & 0x0000FF00) >> 8) / 255;
+    float cb = (float)((Pixel & 0x000000FF) >> 0) / 255;
+    vec3 c =Vec3(cr,cg,cb);
+    *color = c;
+    for (int i=0; i<3; i++) color->Elements[i] = MIN(5/255 + c.Elements[i]*(diff + .5*spec), 255/255);
     return false;
 
 }
 
-Shader Phong = { {},{},{},{},{FRAGMENT_NAME(Phong),
+Shader Phong = { {},{},{},{},{},{FRAGMENT_NAME(Phong),
                               VERTEX_NAME(Phong)}};
 
 
