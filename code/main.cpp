@@ -90,6 +90,7 @@ void DrawRectangle(SDL_Surface * Buffer,float x,float y,float w,float h, float r
     int Y = Buffer->h - y;
     // NOTE(Shazan): Clipping
     if(!(X<0||Y<0||X>Buffer->w - 1 ||Y>Buffer->h - 1)){
+
         Uint8 *Row = (Uint8 *) Buffer->pixels + Y * Buffer->pitch +
             X * Buffer->format->BytesPerPixel;
         Uint32 Rshift, Gshift, Bshift, Ashift;

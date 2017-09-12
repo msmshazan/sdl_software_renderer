@@ -222,6 +222,7 @@ VERTEX_SHADER(Phong)
 
 FRAGMENT_SHADER(Phong)
 {
+
     //float intensity = DotVec3(varying_intensity,BarycentricPos);
 
     vec2 UVP = {};
